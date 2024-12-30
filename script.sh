@@ -17,40 +17,43 @@ apt install nano -y
 
 echo -e "\033[32m editor de texto nano instalado \033[0m"
 
-# gerar certificado autofirmado
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/nginx-selfsigned.key -out /etc/ssl/certs/nginx-selfsigned.crt
+#instalar curl 
+apt install curl -y
+echo -e "\033[32m curl instalado \033[0m"
 
-echo -e "\033[32m certificado autofirmado gerado \033[0m"
+#instalar navegador web links 
 
-# gerar chave 
+apt install links -y
+echo -e "\033[32m links instalado \033[0m"
+
+
+# Gerar certificado autofirmado
+echo -e "\033[32mGerando certificado autofirmado...\033[0m"
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/nginx-selfsigned.key \
+  -out /etc/ssl/certs/nginx-selfsigned.crt
+
+# Gerar chave Diffie-Hellman
+echo -e "\033[32mGerando chave Diffie-Hellman...\033[0m"
 openssl dhparam -out /etc/nginx/dhparam.pem 2048
-echo -e "\033[32m chave ssl gerada \033[0m"
 
-
-#configurar nginx para usar o SSL
-
-# Caminho do arquivo de configuração
-CONF_FILE="/etc/nginx/snippets/self-signed.conf"
-
-# Conteúdo do arquivo de configuração
-CONF_CONTENT="ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
-ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;"
-# Cria o arquivo self-signed.conf 
-echo "Criando o arquivo $CONF_FILE..."
-sudo bash -c "echo '$CONF_CONTENT' > $CONF_FILE"
-
-# Verifica se o arquivo foi criado com sucesso
-if [ -f "$CONF_FILE" ]; then
-    echo "Arquivo $CONF_FILE criado com sucesso!"
-else
-    echo "Erro ao criar o arquivo $CONF_FILE."
+# Criar diretório snippets caso não exista
+if [ ! -d "/etc/nginx/snippets" ]; then
+    echo -e "\033[32mCriando diretório /etc/nginx/snippets...\033[0m"
+    mkdir -p /etc/nginx/snippets
 fi
 
-# Caminho do arquivo
-CONF_FILE_SSL="/etc/nginx/snippets/ssl-params.conf"
+# Criar o arquivo self-signed.conf
+echo -e "\033[32mCriando o arquivo self-signed.conf...\033[0m"
+cat <<EOL > /etc/nginx/snippets/self-signed.conf
+ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
+ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
+EOL
 
-# Conteúdo do arquivo
-CONF_CONTENT_SSL="ssl_protocols TLSv1.3;
+# Criar o arquivo ssl-params.conf
+echo -e "\033[32mCriando o arquivo ssl-params.conf...\033[0m"
+cat <<EOL > /etc/nginx/snippets/ssl-params.conf
+ssl_protocols TLSv1.3;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
 ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
@@ -62,100 +65,46 @@ ssl_stapling on;
 ssl_stapling_verify on;
 resolver 8.8.8.8 8.8.4.4 valid=300s;
 resolver_timeout 5s;
-
-# Disable strict transport security for now. You can uncomment the following
-# line if you understand the implications.
-#add_header Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload;\";
 add_header X-Frame-Options DENY;
 add_header X-Content-Type-Options nosniff;
-add_header X-XSS-Protection \"1; mode=block\";"
-
-# Verifica se o diretório existe
-if [ ! -d "/etc/nginx/snippets" ]; then
-    echo "O diretório /etc/nginx/snippets não existe. Criando..."
-    sudo mkdir -p /etc/nginx/snippets
-fi
-
-# Cria o arquivo e adiciona o conteúdo
-echo "Criando o arquivo $CONF_FILE_SSL..."
-sudo bash -c "echo '$CONF_CONTENT_SSL' > $CONF_FILE_SSL"
-
-# Verifica se o arquivo foi criado com sucesso
-if [ -f "$CONF_FILE_SSL" ]; then
-    echo "Arquivo $CONF_FILE_SSL criado com sucesso!"
-else
-    echo "Erro ao criar o arquivo $CONF_FILE_SSL."
-fi
-
-
-########################### DOMINIO ##############################
+add_header X-XSS-Protection "1; mode=block";
+EOL
 
 # Solicitar o nome do domínio
 echo -e "\033[33mDigite o nome do domínio (exemplo: meu_dominio.local): \033[0m"
 read dominio
 
-# Definir o diretório onde os arquivos do site serão armazenados
+# Configurar diretórios do domínio
 diretorio="/var/www/$dominio"
 html="$diretorio/html"
 status_pages="$diretorio/status-pages"
 logs="$diretorio/logs"
 maintenance="$diretorio/maintenance"
 
-# Verificar se o diretório já existe
-if [ -d "$diretorio" ]; then
-  echo -e "\033[31mO diretório $diretorio já existe!\033[0m"
-  exit 1
-else
-  # Criar o diretório principal e a subpastas
-  mkdir -p "$html"
-  mkdir -p "$status_pages"
-  mkdir -p "$maintenance"
-  echo -e "\033[32mDiretório $html criado!\033[0m"
-  echo -e "\033[32mDiretório $status_page criado!\033[0m"
-  echo -e "\033[32mDiretório $maintenance criado!\033[0m"
-fi
+# Criar diretórios para o domínio
+echo -e "\033[32mCriando diretórios para o domínio...\033[0m"
+mkdir -p "$html" "$status_pages" "$logs" "$maintenance"
 
-#verficar diretorio de logs
-if [ -d "$diretorio/logs" ]; then
-  echo -e "\033[31mO diretório $diretorio logs já existe!\033[0m"
-  exit 1
-else
-  # Criar o diretório logs
-  mkdir -p "$logs"
-  echo -e "\033[32mDiretório $logs criado!\033[0m"
+# Criar arquivos de logs
+echo -e "\033[32mCriando arquivos de logs...\033[0m"
+touch "$logs/nginx_access.log" "$logs/nginx_error.log"
 
-fi
-
-
-#criar arquivos de logs para registro
-touch "$logs/nginx_access.log"
-touch "$logs/nginx_error.log"
-echo -e "\033[32mArquivos de log criados!\033[0m"
-
-
-# Criar uma página de teste simples dentro da pasta html
+# Criar uma página de teste simples
 echo "<html><body><h1>Bem-vindo ao $dominio!</h1></body></html>" > "$html/index.html"
 
-#erros##################################
-
-#Criar Uma pagina de erro 404 
+# Criar páginas de erro personalizadas
 echo "<html><body><h1>Erro 404 :/$dominio!</h1></body></html>" > "$status_pages/404.html"
-
-#Criar pagina manutencao
 echo "<html><body><h1>Manutencao 503 :/$dominio!</h1></body></html>" > "$maintenance/503.html"
 
-
-
-# Definir a configuração do Nginx para o domínio
+# Criar configuração do Nginx para o domínio
 config_file="/etc/nginx/sites-available/$dominio"
-
+echo -e "\033[32mCriando configuração para o domínio...\033[0m"
 cat <<EOL > $config_file
 server {
     listen 80;
     listen [::]:80;
-        
     server_name $dominio;
-    return 301 https://$dominio$request_uri;
+    return 301 https://$dominio\$request_uri;
 }
 server {
     listen 443 ssl http2;
@@ -174,29 +123,27 @@ server {
         try_files \$uri \$uri/ =404;
     }
 
-    # Página de erro personalizada para 404
     error_page 404 /status-pages/404.html;
     location = /status-pages/404.html {
         root $diretorio;
         internal;
     }
 
-    # Página de erro personalizada para 503
     error_page 503 /maintenance/503.html;
     location = /maintenance/503.html {
         root $diretorio;
         internal;
     }
 
-    # Endpoint para ativar a página de manutenção
     location /maintenance {
         return 503;
     }
 }
 EOL
 
-# Criar um link simbólico no diretório sites-enabled
-ln -s $config_file /etc/nginx/sites-enabled/
+# Criar link simbólico no sites-enabled
+echo -e "\033[32mAtivando o site no Nginx...\033[0m"
+ln -sf $config_file /etc/nginx/sites-enabled/
 
 # Adicionar o domínio ao arquivo /etc/hosts
 if ! grep -q "$dominio" /etc/hosts; then
@@ -206,19 +153,14 @@ else
     echo -e "\033[31mO domínio $dominio já está presente no /etc/hosts\033[0m"
 fi
 
-# Testar a configuração do Nginx
-nginx -t
-
-# Verificar se a configuração está correta e recarregar o Nginx
-if [ $? -eq 0 ]; then
-  systemctl reload nginx
-  echo -e "\033[32mDomínio $dominio configurado com sucesso!\033[0m"
+# Testar configuração do Nginx
+echo -e "\033[32mTestando a configuração do Nginx...\033[0m"
+if nginx -t; then
+    # Recarregar o Nginx
+    echo -e "\033[32mRecarregando o Nginx...\033[0m"
+    systemctl reload nginx
+    echo -e "\033[32mDomínio $dominio configurado com sucesso!\033[0m"
 else
-  echo -e "\033[31mErro na configuração do Nginx. Não foi possível recarregar o serviço.\033[0m"
-  exit 1
+    echo -e "\033[31mErro na configuração do Nginx. Verifique os logs.\033[0m"
+    exit 1
 fi
-
-#teste
-
-
-
